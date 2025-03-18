@@ -8,6 +8,7 @@ const jwt = require('jsonwebtoken');
 const fetchpatient = require("../middleware/authenticateUser");
 const patientdata = require("../modules/patientdata");
 const patient = require("../modules/patient");
+const lab_assistant = require("../modules/lab_assistant");
 
 const doc_secret_signature = "doctor key"
 const pati_secret_signature = "patient key"
@@ -125,6 +126,45 @@ router.post('/createdoc', [
     } catch (error) {
         console.error(error.message)
         res.status(420).send("internal server error in creation of doctor")
+    }
+})
+
+// creating lab assistant throught /api/auth/createlabassis
+router.post('/createlabassis', [
+    body('name').isLength({ min: 6 }),
+    body('passward').isLength({ min: 8 }).exists(),
+    body('email').isEmail(),
+    body('lab_name').isLength({ min: 3 }),
+    body('Number').isLength({ min: 10 }, { max: 10 })
+], async (req, res) => {
+    const result = validationResult(req);
+    if (!result.isEmpty()) {
+        return res.status(420).send("wronge cradential")
+    }
+    try {
+        let newassistend = await lab_assistant.findOne({ email: req.body.email })
+        if (newassistend) {
+            return res.status(400).send("user already exist")
+        }
+        newassistend = await lab_assistant.create({
+            name: req.body.name,
+            email: req.body.email,
+            passward: req.body.passward,
+            Number: req.body.Number,
+            lab_name: req.body.lab_name
+        })
+        let saveassis = await newassistend.save();
+        // res.json(savedoc);
+        let data = {
+            lab_assistant: {
+                id: newassistend.id
+            }
+        }
+        let token = jwt.sign(data, doc_secret_signature)
+        res.json({ token })
+    } catch (error) {
+        console.error(error.message)
+        res.status(420).send("internal server error in creation of Lab assistant")
     }
 })
 

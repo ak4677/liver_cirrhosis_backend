@@ -3,11 +3,13 @@ const {Schema}= mongoose
 const PatientSchema=new Schema({
     labassis:{
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'lab_assistant'
+        ref: 'lab_assistant',
+        require: true
     },
     patient:{
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'patient'
+        ref: 'patient',
+        require: true
     },
     ascites:{
         type: String

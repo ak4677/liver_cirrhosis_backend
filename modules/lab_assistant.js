@@ -1,12 +1,12 @@
 const mongoose = require("mongoose");
 const { Schema } = mongoose
 const Lab_assistantSchema = new Schema({
-    Email: { 
-        type: Number, 
+    email: { 
+        type: String, 
         unique: true, 
         required: true 
     },
-    password:{
+    passward:{
         type: String,
         require: true
     },
@@ -14,10 +14,14 @@ const Lab_assistantSchema = new Schema({
         type: String, 
         required: true 
     },
-    lab_id: { 
+    lab_name: { 
+        type: String, 
+        required: true 
+    },
+    Number: { 
         type: Number, 
         required: true 
     }
 });
 
-module.exports = mongoose.model('Lab_assistant', Lab_assistantSchema);
+module.exports = mongoose.model('lab_assistant', Lab_assistantSchema);
