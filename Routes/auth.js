@@ -17,7 +17,7 @@ const pati_secret_signature = "patient key"
 //doctor accont creation on /api/auth/createadmin
 router.post('/createadmin', [
     body('name').isLength({ min: 6 }),
-    body('passward').isLength({ min: 8 }).exists(),
+    body('passward').isLength({ min: 4 }).exists(),
     body('email').isEmail(),
     body('Number').isLength({ min: 10 }, { max: 10 })
 ], async (req, res) => {
@@ -57,7 +57,7 @@ router.post('/addpatient',[
     body('Age').isLength({min: 1},{max: 100}),
     body('email').isEmail(),
     body('Number').isLength({min:10},{max:10}),
-    body('passward').isLength({ min: 8 }).exists(),
+    body('passward').isLength({ min: 4 }).exists(),
     body('sex').exists()
 ],async(req,res)=>{
     const result=validationResult(req)
@@ -95,7 +95,7 @@ router.post('/addpatient',[
 //doctor accont creation on /api/auth/createdoc
 router.post('/createdoc', [
     body('name').isLength({ min: 6 }),
-    body('passward').isLength({ min: 8 }).exists(),
+    body('passward').isLength({ min: 4 }).exists(),
     body('email').isEmail(),
     body('Number').isLength({ min: 10 }, { max: 10 })
 ], async (req, res) => {
@@ -131,8 +131,8 @@ router.post('/createdoc', [
 
 // creating lab assistant throught /api/auth/createlabassis
 router.post('/createlabassis', [
-    body('name').isLength({ min: 6 }),
-    body('passward').isLength({ min: 8 }).exists(),
+    body('name').isLength({ min: 4 }),
+    body('passward').isLength({ min: 4 }).exists(),
     body('email').isEmail(),
     body('lab_name').isLength({ min: 3 }),
     body('Number').isLength({ min: 10 }, { max: 10 })
@@ -169,8 +169,8 @@ router.post('/createlabassis', [
 })
 
 
-//login doctor throught /api/auth/doclogin
-router.post('/doclogin', [
+//login doctor throught /api/auth/login
+router.post('/login', [
     body('passward').exists(),
     body('email').isEmail(),
     body('role').exists()
