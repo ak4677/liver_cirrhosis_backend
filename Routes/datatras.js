@@ -151,6 +151,15 @@ router.get("/admin/patients",authenticateUser,checkRole(['admin']),async(req,res
         res.status(500).json({error:"error in fetching patients"})
     }
 })
+//admin get all the patients on /api/datatras/admin/Assistant
+router.get("/admin/Assistant",authenticateUser,checkRole(['admin']),async(req,res)=>{
+    try {
+        const assistant=await lab_assistant.find().select("-passward");
+        res.status(200).json(assistant);
+    } catch (error) {
+        res.status(500).json({error:"error in fetching assistant"})
+    }
+})
 // Admin Assignment Routes on api/datatras/assignments
 router.get("/assignments", authenticateUser, checkRole(['admin']), async (req, res) => {
     try {
