@@ -21,6 +21,10 @@ const Lab_assistantSchema = new Schema({
     Number: { 
         type: Number, 
         required: true 
+    },
+    isActivated: { 
+        type: Boolean, 
+        default: false 
     }
 });
 

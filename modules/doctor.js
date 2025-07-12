@@ -12,11 +12,16 @@ const DoctorShema= new Schema({
     },
     passward:{
         type: String,
-        required: true
+        // required: true
+        default: null
     },
     Number:{
         type: Number,
         required: true
+    },
+    isActivated: { 
+        type: Boolean, 
+        default: false 
     }
 });
 

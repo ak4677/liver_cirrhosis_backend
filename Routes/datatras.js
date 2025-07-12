@@ -168,7 +168,7 @@ router.get("/assignments", authenticateUser, checkRole(['admin']), async (req, r
             .populate("patient_id", "name Age");
         res.status(200).json(assignments);
     } catch (err) {
-        res.status(500).json({ error: "Server error" });
+        res.status(500).json({ error: "Server error in fetching assignment" });
     }
 });
 
@@ -183,7 +183,7 @@ router.post("/assignments", authenticateUser, checkRole(['admin']), async (req, 
         });
         res.status(201).json(newAssignment);
     } catch (err) {
-        res.status(500).json({ error: "Server error" });
+        res.status(500).json({ error: "Server error in creating assignment" });
     }
 });
 

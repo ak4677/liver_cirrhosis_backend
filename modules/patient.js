@@ -25,6 +25,10 @@ const PatientSchema = new Schema({
     Number:{
         type: Number,
         required: true
+    },
+    isActivated: { 
+        type: Boolean, 
+        default: false 
     }
 });
 
