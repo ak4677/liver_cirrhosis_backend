@@ -49,6 +49,7 @@ router.post('/createadmin', authenticateUser, checkRole(['admin']), [
         // }
         // let token = jwt.sign(data, doc_secret_signature)
         // res.json({ token })
+        
     } catch (error) {
         console.error(error.message)
         res.status(420).send("internal server error in creation of admin")
@@ -253,7 +254,7 @@ router.post('/login', [
         patient: patient,
         doctor: doctor,
         admin: admin,
-        labassistant: Lab_assistant
+        lab_assistant: Lab_assistant
         // receptionist: Receptionist // add when needed
     };
     try {
@@ -284,7 +285,7 @@ router.post('/login', [
         res.json(token)
     } catch (error) {
         console.error(error.message)
-        return res.status(420).send("internal server error in doctor loing")
+        return res.status(420).send(`internal server error in ${role} login`)
     }
 })
 

@@ -17,6 +17,10 @@ const AdminSchema = new Schema({
     Number: { 
         type: Number, 
         required: true 
+    },
+    isActivated: { 
+        type: Boolean, 
+        default: true 
     }
 });
 

@@ -11,7 +11,7 @@ const PatientSchema = new Schema({
     },
     sex:{
         type: String,
-        enum: ["F","M"],
+        enum: ["F","M","O"],
         required: true
     },
     email:{
