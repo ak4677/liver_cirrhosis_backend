@@ -198,7 +198,7 @@ router.post('/:role/signup', [
 
     // Map roles to their respective models
     const roleModelMap = {
-        'lab-assistant': lab_assistant,
+        'labassistant': lab_assistant,
         'doctor': doctor,
         'patient': patient
     };

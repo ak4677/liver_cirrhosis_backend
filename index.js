@@ -1,3 +1,4 @@
+require('dotenv').config({ path: __dirname + '/.env' })
 const express = require('express')
 const connectomango = require('./database')
 const cors=require('cors')
