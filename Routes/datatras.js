@@ -132,40 +132,50 @@ router.get('/doctor/patients', authenticateUser, checkRole(['doctor']), async (r
 
 
 //admin get all the doctors on /api/datatras/admin/doctors
-router.get("/admin/doctors",authenticateUser,checkRole(['admin']),async(req,res)=>{
+router.get("/admin/doctors", authenticateUser, checkRole(['admin']), async (req, res) => {
     try {
-        const doctors=await doctor.find().select("-passward");
+        const doctors = await doctor.find().select("-passward");
+        if (!doctors) {
+            res.status(404).json({ message: "doctor not found" })
+        }
         res.status(200).json(doctors);
     } catch (error) {
-        res.status(500).json({error:"error in fetching doctors"})
+        res.status(500).json({ error: "error in fetching doctors" })
     }
 });
 
 
 //admin get all the patients on /api/datatras/admin/patients
-router.get("/admin/patients",authenticateUser,checkRole(['admin']),async(req,res)=>{
+router.get("/admin/patients", authenticateUser, checkRole(['admin']), async (req, res) => {
     try {
-        const patients=await patient.find().select("-passward");
+        const patients = await patient.find().select("-passward");
+        if (!patients) {
+            res.status(404).json({ message: "patient not found" })
+        }
         res.status(200).json(patients);
     } catch (error) {
-        res.status(500).json({error:"error in fetching patients"})
+        res.status(500).json({ error: "error in fetching patients" })
     }
 })
 //admin get all the patients on /api/datatras/admin/Assistant
-router.get("/admin/Assistant",authenticateUser,checkRole(['admin']),async(req,res)=>{
+router.get("/admin/Assistant", authenticateUser, checkRole(['admin']), async (req, res) => {
     try {
-        const assistant=await lab_assistant.find().select("-passward");
+        const assistant = await lab_assistant.find().select("-passward");
         res.status(200).json(assistant);
     } catch (error) {
-        res.status(500).json({error:"error in fetching assistant"})
+        res.status(500).json({ error: "error in fetching assistant" })
     }
 })
 // Admin Assignment Routes on api/datatras/assignments
 router.get("/assignments", authenticateUser, checkRole(['admin']), async (req, res) => {
     try {
-        const assignments = await assignment.find({ admin_id: req.user.id })
+        let assignments = await assignment.find({ admin_id: req.user.id })
             .populate("doctor_id", "name Number")
             .populate("patient_id", "name Age");
+        assignments = assignments.filter(a => a.doctor_id && a.patient_id);
+        if (assignments.length === 0) {
+            return res.status(200).json({ message: "No assignments found", data: [] });
+        }
         res.status(200).json(assignments);
     } catch (err) {
         res.status(500).json({ error: "Server error in fetching assignment" });
@@ -187,4 +197,39 @@ router.post("/assignments", authenticateUser, checkRole(['admin']), async (req, 
     }
 });
 
+//admin delete assignment using api/datatras/deleteassignment/{id}
+router.delete('/deleteassignment/:id', authenticateUser, checkRole(['admin']), async (req, res) => {
+    try {
+        let findassignment = await assignment.findById(req.params.id)
+        if (!findassignment) { return res.status(404).send("assignment not found!") }
+        if (findassignment.admin_id && findassignment.admin_id.toString() !== req.user.id) { return res.status(420).send("unauthorized person detected") }
+
+        findassignment = await assignment.findByIdAndDelete(req.params.id)
+        res.json({ "delete": "successuflly", assignment: findassignment })
+    } catch (error) {
+        console.error(error.message)
+        res.status(400).send("some error occure in deleting assignment")
+    }
+})
+
+router.delete('/delete/:id', authenticateUser, checkRole(['admin']), async (req, res) => {
+    const roleModelMap = {
+        'lab_assistant': lab_assistant,
+        'doctor': doctor,
+        'patient': patient
+    };
+    try {
+        const role = req.body.role.toLowerCase();
+        const Model = roleModelMap[role];
+        let finduser = await Model.findById(req.params.id)
+        if (!finduser) { return res.status(404).send("user not found!") }
+        // if (finduser.admin_id && findassignment.admin_id.toString() !== req.user.id) { return res.status(420).send("unauthorized person detected") }
+
+        finduser = await Model.findByIdAndDelete(req.params.id)
+        res.json({ "delete": "successuflly", Model: finduser })
+    } catch (error) {
+        console.error(error.message)
+        res.status(400).send("some error occure in deleting assignment")
+    }
+})
 module.exports = router;
