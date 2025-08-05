@@ -9,6 +9,7 @@ const doctor = require('../modules/doctor')
 const patient = require('../modules/patient')
 const admin = require('../modules/admin')
 const lab_assistant = require('../modules/lab_assistant')
+const patient_lab = require('../modules/patient_lab')
 
 
 //fetch doctor throught /api/datatras/getinfo
@@ -230,6 +231,99 @@ router.delete('/delete/:id', authenticateUser, checkRole(['admin']), async (req,
     } catch (error) {
         console.error(error.message)
         res.status(400).send("some error occure in deleting assignment")
+    }
+})
+
+//doctor will get all the lab assitants via route /api/datatras/doctor/Assistant
+router.get("/doctor/Assistant", authenticateUser, checkRole(['doctor']), async (req, res) => {
+    try {
+        const assistant = await lab_assistant.find().select("-passward");
+        res.status(200).json(assistant);
+    } catch (error) {
+        res.status(500).json({ error: "error in fetching assistant via doctor" })
+    }
+})
+
+// doctor will assign lab assistant to patient via route /api/datatras/doctor/assign-lab
+router.post('/doctor/assign-lab', authenticateUser, checkRole(['doctor']),[
+    body('patient').exists(),
+    body('lab_assistant').exists()
+], async (req, res) => {
+    try {
+        const result = validationResult(req)
+        if (!result.isEmpty()) {
+            return res.status(420).send("invalid credentials")
+        }
+        const foundpatient = await patient.findById(req.body.patient)
+        if (!foundpatient) {
+            return res.status(404).send("patient not found")
+        }
+        const labAssistant = await lab_assistant.findById(req.body.lab_assistant)
+        if (!labAssistant) {
+            return res.status(404).send("lab assistant not found")
+        }
+        const newAssignment = new patient_lab({
+            doctor_id: req.user.id,
+            patient_id: req.body.patient,
+            lab_assistant: req.body.lab_assistant
+        });
+        const savedAssignment = await newAssignment.save();
+        res.status(200).json({ message: "Lab assistant assigned successfully", data: savedAssignment });
+    } catch (error) {
+        console.error(error.message)
+        res.status(400).send("some error occurred in assigning lab assistant")
+    }
+})
+
+
+// lab assistatant get all patient assigned to him via route /api/datatras/lab_assistant/patients
+router.get('/lab_assistant/patients', authenticateUser, checkRole(['lab_assistant']), async (req, res) => {
+    try {
+        const patients = await patient_lab.find({ lab_assistant: req.user.id }).populate('patient_id');
+        res.status(200).json(patients);
+    } catch (error) {
+        console.error(error.message);
+        res.status(500).json({ error: "error in fetching patients assigned to lab assistant" });
+    }
+})
+
+// Lab Assistant Routes for uploading lab data
+// POST /api/datatras/lab_assistant/upload
+router.post('/lab_assistant/upload', authenticateUser, checkRole(['lab_assistant']), [
+    body('patient').exists()
+], async (req, res) => {
+    try {
+        const result = validationResult(req)
+        if (!result.isEmpty()) {
+            return res.status(420).send("invalid credentials")
+        }
+        const patient= await patient.findById(req.body.patient)
+        if (!patient) {
+            return res.status(404).send("patient not found")
+        }
+        const newPatientData = new patientdata({
+            lab_assistant: req.user.id,
+            patient: req.body.patient,
+            ascites: req.body.ascites,
+            hepatome: req.body.hepatome,
+            spiders: req.body.spiders,
+            edema: req.body.edema,
+            bilirubin: req.body.bilirubin,
+            cholesterol: req.body.cholesterol,
+            albumin: req.body.albumin,
+            copper: req.body.copper,
+            alk_phos: req.body.alk_phos,
+            SGOT: req.body.SGOT,
+            tryglicerides: req.body.tryglicerides,
+            platelets: req.body.platelets,
+            prothrombin: req.body.prothrombin
+        });
+        const savedata=await newPatientData.save();
+        res.status(200).json({ message: "Lab data uploaded successfully", data: savedata });
+    } catch (error) {
+        console.error(error.message)
+        res.status(400).send("some error occurred in uploading lab data")
+        
     }
 })
 module.exports = router;
