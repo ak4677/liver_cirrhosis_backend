@@ -31,7 +31,7 @@ router.post('/getinfo', authenticateUser, async (req, res) => {
             // case "receptionist":
             //     user = await Receptionist.findById(req.user.id).select("-passward");
             //     break;
-            case "labassistant":
+            case "lab_assistant":
                 user = await lab_assistant.findById(req.user.id).select("-passward");
                 break;
             default:
@@ -245,7 +245,7 @@ router.get("/doctor/Assistant", authenticateUser, checkRole(['doctor']), async (
 })
 
 // doctor will assign lab assistant to patient via route /api/datatras/doctor/assign-lab
-router.post('/doctor/assign-lab', authenticateUser, checkRole(['doctor']),[
+router.post('/doctor/assign-lab', authenticateUser, checkRole(['doctor']), [
     body('patient').exists(),
     body('lab_assistant').exists()
 ], async (req, res) => {
@@ -275,7 +275,16 @@ router.post('/doctor/assign-lab', authenticateUser, checkRole(['doctor']),[
     }
 })
 
-
+//doctor will get all the assigned lab to patients via route /api/datatras/doctor/lab_assigned
+router.get('/doctor/lab_assigned', authenticateUser, checkRole(['doctor']), async (req, res) => {
+    try {
+        const assignedlab = await patient_lab.find({ doctor_id: req.user.id }).populate("doctor_id", "name Number").populate("patient_id", "name Number").populate("lab_assistant", "name Number")
+        res.status(200).json(assignedlab);
+    } catch (error) {
+        console.error(error.message);
+        res.status(500).json({ error: "error in fetching patient labassitant assignments" });
+    }
+})
 // lab assistatant get all patient assigned to him via route /api/datatras/lab_assistant/patients
 router.get('/lab_assistant/patients', authenticateUser, checkRole(['lab_assistant']), async (req, res) => {
     try {
@@ -297,7 +306,7 @@ router.post('/lab_assistant/upload', authenticateUser, checkRole(['lab_assistant
         if (!result.isEmpty()) {
             return res.status(420).send("invalid credentials")
         }
-        const patient= await patient.findById(req.body.patient)
+        const patient = await patient.findById(req.body.patient)
         if (!patient) {
             return res.status(404).send("patient not found")
         }
@@ -318,12 +327,12 @@ router.post('/lab_assistant/upload', authenticateUser, checkRole(['lab_assistant
             platelets: req.body.platelets,
             prothrombin: req.body.prothrombin
         });
-        const savedata=await newPatientData.save();
+        const savedata = await newPatientData.save();
         res.status(200).json({ message: "Lab data uploaded successfully", data: savedata });
     } catch (error) {
         console.error(error.message)
         res.status(400).send("some error occurred in uploading lab data")
-        
+
     }
 })
 module.exports = router;
