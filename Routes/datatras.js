@@ -106,7 +106,7 @@ router.get('/doctor/patients', authenticateUser, checkRole(['doctor']), async (r
         // 4. Get all medical data for these patients
         const medicalData = await patientdata.find({
             patient: { $in: patientIds }
-        }).populate('lab_assistant', 'name lab_id');
+        }).populate('labassis', 'name lab_name');
 
         // 5. Combine data into response format
         const response = assignments.map(assignment => {
@@ -127,7 +127,7 @@ router.get('/doctor/patients', authenticateUser, checkRole(['doctor']), async (r
         res.status(200).json(response);
     } catch (err) {
         console.error(err);
-        res.status(500).json({ error: 'Server error' });
+        res.status(500).json({ error: 'Server error fetching patients' });
     }
 });
 
@@ -275,6 +275,18 @@ router.post('/doctor/assign-lab', authenticateUser, checkRole(['doctor']), [
     }
 })
 
+//doctor will delete the assigned lab to patient via route /api/datatras/doctor/deletelab
+router.delete('/doctor/deletelab/:id',authenticateUser,checkRole(['doctor']),async(req,res)=>{
+    try {
+        let findlab=await patient_lab.findById(req.params.id)
+        if(!findlab) {return res.status(404).send("lab not found")}
+        findlab=await patient_lab.findByIdAndDelete(req.params.id);
+        res.status(200).json({delete: "success fully", findlab})
+    } catch (error) {
+        console.error(error.message);
+        res.status(500).json({ error: "error in deleting patient labassitant assignments" });
+    }
+})
 //doctor will get all the assigned lab to patients via route /api/datatras/doctor/lab_assigned
 router.get('/doctor/lab_assigned', authenticateUser, checkRole(['doctor']), async (req, res) => {
     try {
@@ -306,8 +318,8 @@ router.post('/lab_assistant/upload', authenticateUser, checkRole(['lab_assistant
         if (!result.isEmpty()) {
             return res.status(420).send("invalid credentials")
         }
-        const patient = await patient.findById(req.body.patient)
-        if (!patient) {
+        const findpatient = await patient.findById(req.body.patient)
+        if (!findpatient) {
             return res.status(404).send("patient not found")
         }
         const newPatientData = new patientdata({
