@@ -29,7 +29,13 @@ const PatientSchema = new Schema({
     isActivated: { 
         type: Boolean, 
         default: false 
-    }
+    },
+    prediction: {
+        type: Number, // predicted class (e.g., 0/1)
+    },
+    risk_percentages: {
+        type: [Number], // probabilities for each class
+    },
 });
 
 module.exports = mongoose.model('patient', PatientSchema);

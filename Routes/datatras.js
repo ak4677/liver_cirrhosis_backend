@@ -96,7 +96,7 @@ router.get('/doctor/patients', authenticateUser, checkRole(['doctor']), async (r
         const assignments = await assignment.find({ doctor_id: doctorId })
             .populate({
                 path: 'patient_id',
-                select: 'name Age sex email Number',
+                select: 'name Age sex email Number prediction risk_percentages',
                 model: 'patient'
             });
 
@@ -347,4 +347,57 @@ router.post('/lab_assistant/upload', authenticateUser, checkRole(['lab_assistant
 
     }
 })
+
+
+// prediction route
+router.post("/:id/labdata",authenticateUser,checkRole(['doctor']), async (req, res) => {
+  try {
+    const patientId = req.params.id;
+    const labData = req.body; // JSON body from frontend
+
+    // ✅ Enrich labData with default values required by the ML model
+    const enrichedData = {
+      ...labData,
+      ID: patientId,                 // Use Mongo _id as ID
+      N_Days: labData.N_Days || 0,   // default if not provided
+      Drug: labData.Drug || "D-penicillamine", // safe default
+      Age: labData.Age || 20000,     // approximate if age not in schema
+      Sex: labData.Sex || "F",       // default Female
+      Stage: labData.Stage || 3      // mid-stage default
+    };
+
+    // Call Python Flask API
+    const response = await fetch("http://localhost:5001/predict", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(enrichedData),
+    });
+
+    const result = await response.json(); 
+    if (result.error) {
+      return res.status(500).json({ success: false, error: result.error });
+    }
+
+    // Save lab data + prediction in MongoDB
+    const updatedPatient = await patient.findByIdAndUpdate(
+      patientId,
+      {
+        ...labData, // only keep actual patient schema fields
+        prediction: result.prediction,
+        risk_percentages: result.risk_percentages,
+      },
+      { new: true }
+    );
+
+    res.json({
+      success: true,
+      patient: updatedPatient,
+    });
+  } catch (err) {
+    console.error("Prediction failed:", err);
+    res.status(500).json({ success: false, error: "Prediction failed" });
+  }
+});
+
+
 module.exports = router;
