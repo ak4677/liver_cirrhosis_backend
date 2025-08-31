@@ -276,12 +276,12 @@ router.post('/doctor/assign-lab', authenticateUser, checkRole(['doctor']), [
 })
 
 //doctor will delete the assigned lab to patient via route /api/datatras/doctor/deletelab
-router.delete('/doctor/deletelab/:id',authenticateUser,checkRole(['doctor']),async(req,res)=>{
+router.delete('/doctor/deletelab/:id', authenticateUser, checkRole(['doctor']), async (req, res) => {
     try {
-        let findlab=await patient_lab.findById(req.params.id)
-        if(!findlab) {return res.status(404).send("lab not found")}
-        findlab=await patient_lab.findByIdAndDelete(req.params.id);
-        res.status(200).json({delete: "success fully", findlab})
+        let findlab = await patient_lab.findById(req.params.id)
+        if (!findlab) { return res.status(404).send("lab not found") }
+        findlab = await patient_lab.findByIdAndDelete(req.params.id);
+        res.status(200).json({ delete: "success fully", findlab })
     } catch (error) {
         console.error(error.message);
         res.status(500).json({ error: "error in deleting patient labassitant assignments" });
@@ -350,54 +350,83 @@ router.post('/lab_assistant/upload', authenticateUser, checkRole(['lab_assistant
 
 
 // prediction route
-router.post("/:id/labdata",authenticateUser,checkRole(['doctor']), async (req, res) => {
-  try {
-    const patientId = req.params.id;
-    const labData = req.body; // JSON body from frontend
+router.post("/:id/labdata", authenticateUser, checkRole(['doctor']), async (req, res) => {
+    try {
+        const patientId = req.params.id;
+        const labData = req.body; // JSON body from frontend
+        if (!labData || Object.keys(labData).length === 0) {
+            return res.status(400).json({ success: false, message: "No data for prediction" });
+        }
 
-    // ✅ Enrich labData with default values required by the ML model
-    const enrichedData = {
-      ...labData,
-      ID: patientId,                 // Use Mongo _id as ID
-      N_Days: labData.N_Days || 0,   // default if not provided
-      Drug: labData.Drug || "D-penicillamine", // safe default
-      Age: labData.Age || 20000,     // approximate if age not in schema
-      Sex: labData.Sex || "F",       // default Female
-      Stage: labData.Stage || 3      // mid-stage default
-    };
+        // ✅ Enrich labData with default values required by the ML model
+        const enrichedData = {
+            ...labData,
+            ID: patientId,                 // Use Mongo _id as ID
+            N_Days: labData.N_Days || 0,   // default if not provided
+            Drug: labData.Drug || "D-penicillamine", // safe default
+            Age: labData.Age || 20000,     // approximate if age not in schema
+            Sex: labData.Sex || "F",       // default Female
+            Stage: labData.Stage || 3      // mid-stage default
+        };
 
-    // Call Python Flask API
-    const response = await fetch("http://localhost:5001/predict", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(enrichedData),
-    });
+        // Call Python Flask API
+        const response = await fetch("http://localhost:5001/predict", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(enrichedData),
+        });
 
-    const result = await response.json(); 
-    if (result.error) {
-      return res.status(500).json({ success: false, error: result.error });
+        const result = await response.json();
+        if (result.error) {
+            return res.status(500).json({ success: false, error: result.error });
+        }
+
+        // Save lab data + prediction in MongoDB
+        const updatedPatient = await patient.findByIdAndUpdate(
+            patientId,
+            {
+                ...labData, // only keep actual patient schema fields
+                prediction: result.prediction,
+                risk_percentages: result.risk_percentages,
+            },
+            { new: true }
+        );
+
+        res.json({
+            success: true,
+            patient: updatedPatient,
+        });
+    } catch (err) {
+        console.error("Prediction failed:", err);
+        res.status(500).json({ success: false, error: "Prediction failed" });
     }
-
-    // Save lab data + prediction in MongoDB
-    const updatedPatient = await patient.findByIdAndUpdate(
-      patientId,
-      {
-        ...labData, // only keep actual patient schema fields
-        prediction: result.prediction,
-        risk_percentages: result.risk_percentages,
-      },
-      { new: true }
-    );
-
-    res.json({
-      success: true,
-      patient: updatedPatient,
-    });
-  } catch (err) {
-    console.error("Prediction failed:", err);
-    res.status(500).json({ success: false, error: "Prediction failed" });
-  }
 });
 
+//patient get its own data 
+router.get("/patient", authenticateUser, checkRole('patient'), async (req, res) => {
+    try {
+        // fetch all medical history documents of this patient
+        const userInfo = await patient.findById(req.user.id).select("name prediction risk_percentages");
+        const histories = await patientdata.find({ patient: req.user.id }).sort({ _id: -1 })
 
+        if (!histories || !userInfo || histories.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: "Patient data not available",
+            });
+        }
+        // build response in the same shape your frontend expects
+        const responseData = {
+            name: userInfo.name,
+            prediction: userInfo.prediction ?? 0,
+            risk_percentages: userInfo.risk_percentages ?? [0, 0, 0],
+            medical_history: histories // return full array of history docs
+        };
+
+        res.status(200).json(responseData);
+    } catch (error) {
+        console.error("Prediction failed:", error);
+        res.status(500).json({ success: false, error: "error in fetching patient data by own" });
+    }
+})
 module.exports = router;
