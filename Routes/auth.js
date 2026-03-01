@@ -96,7 +96,7 @@ router.post('/addpatient', authenticateUser, checkRole(['admin']), [
         res.status(201).json({ message: "patient created. Awaiting account activation." });
     } catch (error) {
         console.error(error.message)
-        res.status(400).send("internal server error in fatching patients")
+        res.status(400).send("internal server error in creating patients")
     }
 })
 

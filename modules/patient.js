@@ -1,41 +1,43 @@
-const mongoose = require("mongoose");
-const { Schema } = mongoose
+const mongoose = require('mongoose');
+const { Schema } = mongoose;
+
+// Patient identity and auth only.
+// All test data and ML predictions live in patientdata.js linked by patient ObjectId.
+// The embedded skinCancer / liverCirrhosis / cvd fields from the old version have
+// been removed - they duplicated patientdata.js with inconsistent field names.
+
 const PatientSchema = new Schema({
-    name:{
+    name: {
         type: String,
         required: true
     },
-    Age:{
+    Age: {
         type: Number,
         required: true
     },
-    sex:{
+    sex: {
         type: String,
-        enum: ["F","M","O"],
+        enum: ['F', 'M', 'O'],
         required: true
     },
-    email:{
+    email: {
         type: String,
-        required: true
+        required: true,
+        unique: true
     },
-    passward:{
+    passward: {
         type: String,
-        require:true
+        // required: true
+        default: null
     },
-    Number:{
+    Number: {
         type: Number,
         required: true
     },
-    isActivated: { 
-        type: Boolean, 
-        default: false 
-    },
-    prediction: {
-        type: Number, // predicted class (e.g., 0/1)
-    },
-    risk_percentages: {
-        type: [Number], // probabilities for each class
-    },
+    isActivated: {
+        type: Boolean,
+        default: false
+    }
 });
 
 module.exports = mongoose.model('patient', PatientSchema);

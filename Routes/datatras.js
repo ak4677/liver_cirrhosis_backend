@@ -10,7 +10,24 @@ const patient = require('../modules/patient')
 const admin = require('../modules/admin')
 const lab_assistant = require('../modules/lab_assistant')
 const patient_lab = require('../modules/patient_lab')
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
 
+const uploadPath = 'uploads/skin';
+if (!fs.existsSync(uploadPath)) {
+    fs.mkdirSync(uploadPath, { recursive: true });
+}
+const storage = multer.diskStorage({
+    destination: function (req, file, cb) {
+        cb(null, uploadPath);
+    },
+    filename: function (req, file, cb) {
+        cb(null, Date.now() + '-' + file.originalname);
+    }
+});
+
+const upload = multer({ storage });
 
 //fetch doctor throught /api/datatras/getinfo
 router.post('/getinfo', authenticateUser, async (req, res) => {
@@ -91,25 +108,28 @@ router.get('/doctor/patients', authenticateUser, checkRole(['doctor']), async (r
     try {
         // 1. Get the logged-in doctor's ID
         const doctorId = req.user.id;
-
+        // console.log(doctorId);
         // 2. Find all assignments for this doctor
         const assignments = await assignment.find({ doctor_id: doctorId })
             .populate({
                 path: 'patient_id',
-                select: 'name Age sex email Number prediction risk_percentages',
+                select: 'name Age sex email Number skinCancer liverCirrhosis cvd',
                 model: 'patient'
             });
 
         // 3. Extract patient IDs from assignments
-        const patientIds = assignments.map(a => a.patient_id._id);
+        const validAssignments = assignments.filter(a => a.patient_id);
+
+        // Extract patient IDs
+        const patientIds = validAssignments.map(a => a.patient_id._id);
 
         // 4. Get all medical data for these patients
         const medicalData = await patientdata.find({
             patient: { $in: patientIds }
-        }).populate('labassis', 'name lab_name');
+        })
 
         // 5. Combine data into response format
-        const response = assignments.map(assignment => {
+        const response = validAssignments.map(assignment => {
             const patient = assignment.patient_id.toObject();
             const data = medicalData.filter(md =>
                 md.patient.equals(patient._id)
@@ -300,51 +320,107 @@ router.get('/doctor/lab_assigned', authenticateUser, checkRole(['doctor']), asyn
 // lab assistatant get all patient assigned to him via route /api/datatras/lab_assistant/patients
 router.get('/lab_assistant/patients', authenticateUser, checkRole(['lab_assistant']), async (req, res) => {
     try {
-        const patients = await patient_lab.find({ lab_assistant: req.user.id }).populate('patient_id');
-        res.status(200).json(patients);
+      // 1. Get all patient_lab assignments for this lab assistant
+      const assignments = await patient_lab
+        .find({ lab_assistant: req.user.id })
+        .populate('patient_id');
+
+      if (!assignments || assignments.length === 0) {
+        return res.status(200).json([]);
+      }
+
+      // 2. Collect all patient IDs from the assignments
+      const patientIds = assignments
+        .filter(a => a.patient_id)
+        .map(a => a.patient_id._id);
+
+      // 3. Fetch all patientdata records for these patients in one query
+      //    (far more efficient than one query per patient)
+      const allPatientData = await patientdata.find({
+        patient: { $in: patientIds }
+      });
+
+      // 4. Attach the relevant patientData records to each assignment object
+      //    so the frontend can read skinData, liverData, cvdData, predictions
+      const result = assignments
+        .filter(a => a.patient_id)   // drop any orphaned assignments
+        .map(a => ({
+          ...a.toObject(),
+          patientData: allPatientData.filter(d =>
+            d.patient.equals(a.patient_id._id)
+          )
+        }));
+
+      return res.status(200).json(result);
     } catch (error) {
-        console.error(error.message);
-        res.status(500).json({ error: "error in fetching patients assigned to lab assistant" });
+      console.error('[lab_assistant/patients]', error.message);
+      return res.status(500).json({
+        error: 'Error fetching patients assigned to lab assistant'
+      });
     }
 })
 
 // Lab Assistant Routes for uploading lab data
 // POST /api/datatras/lab_assistant/upload
-router.post('/lab_assistant/upload', authenticateUser, checkRole(['lab_assistant']), [
-    body('patient').exists()
-], async (req, res) => {
+router.post('/lab_assistant/upload', authenticateUser, checkRole(['lab_assistant']), upload.array('images'), async (req, res) => {
     try {
-        const result = validationResult(req)
-        if (!result.isEmpty()) {
-            return res.status(420).send("invalid credentials")
+        const foundpatient = await patient.findById(req.body.patient);
+        if (!foundpatient) {
+            return res.status(404).json({ message: 'Patient not found' });
         }
-        const findpatient = await patient.findById(req.body.patient)
-        if (!findpatient) {
-            return res.status(404).send("patient not found")
-        }
+
         const newPatientData = new patientdata({
             lab_assistant: req.user.id,
-            patient: req.body.patient,
-            ascites: req.body.ascites,
-            hepatome: req.body.hepatome,
-            spiders: req.body.spiders,
-            edema: req.body.edema,
-            bilirubin: req.body.bilirubin,
-            cholesterol: req.body.cholesterol,
-            albumin: req.body.albumin,
-            copper: req.body.copper,
-            alk_phos: req.body.alk_phos,
-            SGOT: req.body.SGOT,
-            tryglicerides: req.body.tryglicerides,
-            platelets: req.body.platelets,
-            prothrombin: req.body.prothrombin
+            patient:       req.body.patient
         });
-        const savedata = await newPatientData.save();
-        res.status(200).json({ message: "Lab data uploaded successfully", data: savedata });
-    } catch (error) {
-        console.error(error.message)
-        res.status(400).send("some error occurred in uploading lab data")
 
+        // Liver
+        if (req.body.ascites) {
+            newPatientData.liverData = {
+                ascites:      req.body.ascites,
+                hepatome:     req.body.hepatome,
+                spiders:      req.body.spiders,
+                edema:        req.body.edema,
+                bilirubin:    req.body.bilirubin,
+                cholesterol:  req.body.cholesterol,
+                albumin:      req.body.albumin,
+                copper:       req.body.copper,
+                alk_phos:     req.body.alk_phos,
+                SGOT:         req.body.SGOT,
+                tryglicerides: req.body.tryglicerides,
+                platelets:    req.body.platelets,
+                prothrombin:  req.body.prothrombin
+            };
+        }
+
+        // Skin - store ONLY file paths, predictions stays empty []
+        if (req.files && req.files.length > 0) {
+            newPatientData.skinData = {
+                images:      req.files.map(f => f.path),
+                predictions: []
+            };
+        }
+
+        // CVD
+        if (req.body.age) {
+            newPatientData.cvdData = {
+                age:           req.body.age,
+                bloodPressure: req.body.bloodPressure,
+                cholesterol:   req.body.cholesterol,
+                heartRate:     req.body.heartRate,
+                bloodSugar:    req.body.bloodSugar
+            };
+        }
+
+        const saved = await newPatientData.save();
+        return res.status(200).json({
+            message: 'Lab data uploaded successfully',
+            data:    saved
+        });
+
+    } catch (error) {
+        console.error('[upload]', error.message);
+        res.status(500).json({ error: 'Error uploading lab data', detail: error.message });
     }
 })
 
@@ -354,6 +430,9 @@ router.post("/:id/labdata", authenticateUser, checkRole(['doctor']), async (req,
     try {
         const patientId = req.params.id;
         const labData = req.body; // JSON body from frontend
+        if (Array.isArray(labData)) {
+            labData = labData.at(-1);
+        }
         if (!labData || Object.keys(labData).length === 0) {
             return res.status(400).json({ success: false, message: "No data for prediction" });
         }
@@ -408,19 +487,33 @@ router.get("/patient", authenticateUser, checkRole('patient'), async (req, res) 
         // fetch all medical history documents of this patient
         const userInfo = await patient.findById(req.user.id).select("name prediction risk_percentages");
         const histories = await patientdata.find({ patient: req.user.id }).sort({ _id: -1 })
-
+        const doc = await assignment.findOne({ patient_id: req.user.id }).populate({
+            path: 'doctor_id',
+            select: 'name email Number',
+            model: 'doctor'
+        });
+        // console.log(doc);
         if (!histories || !userInfo || histories.length === 0) {
             return res.status(404).json({
                 success: false,
                 message: "Patient data not available",
             });
         }
+
+        const doctorInfo = doc?.doctor_id
+            ? {
+                name: doc.doctor_id.name,
+                email: doc.doctor_id.email,
+                number: doc.doctor_id.Number,
+            }
+            : null;
         // build response in the same shape your frontend expects
         const responseData = {
             name: userInfo.name,
             prediction: userInfo.prediction ?? 0,
             risk_percentages: userInfo.risk_percentages ?? [0, 0, 0],
-            medical_history: histories // return full array of history docs
+            medical_history: histories, // return full array of history docs
+            doctor: doctorInfo
         };
 
         res.status(200).json(responseData);
