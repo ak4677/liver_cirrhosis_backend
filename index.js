@@ -13,6 +13,8 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use('/api/auth',require('./Routes/auth'))
 app.use('/api/datatras',require('./Routes/datatras'))
 app.use('/api/models',require('./Routes/models'))
+app.use('/api/chat', require('./Routes/chat'));
+
 app.listen(port, () => {
   console.log(`Example app listening on port ${port}`)
 })
