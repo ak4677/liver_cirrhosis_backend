@@ -143,7 +143,7 @@ router.get('/doctor/patients', authenticateUser, checkRole(['doctor']), async (r
                 }))
             };
         });
-
+        // console.log(response)
         res.status(200).json(response);
     } catch (err) {
         console.error(err);
@@ -405,13 +405,23 @@ router.post('/lab_assistant/upload', authenticateUser, checkRole(['lab_assistant
         if (req.body.age) {
             newPatientData.cvdData = {
                 age: req.body.age,
+                sex: req.body.sex,
+                bmi: req.body.bmi,
                 bloodPressure: req.body.bloodPressure,
+                diastolic: req.body.diastolic,
                 cholesterol: req.body.cholesterol,
                 heartRate: req.body.heartRate,
-                bloodSugar: req.body.bloodSugar
+                bloodSugar: req.body.bloodSugar,
+                crp: req.body.crp
             };
         }
-
+        //basic
+        if (req.body.basicHealthData) {
+            newPatientData.basicHealthData = {
+                ...req.body.basicHealthData,
+                createdAt: new Date()
+            };
+        }
         const saved = await newPatientData.save();
         return res.status(200).json({
             message: 'Lab data uploaded successfully',
@@ -771,19 +781,121 @@ router.post('/:patientDataId/predict/xray', authenticateUser, checkRole(['doctor
     }
 );
 
+// CVD prediction
+router.post('/:patientDataId/predict/cvd',
+    authenticateUser,
+    checkRole(['doctor']),
+    async (req, res) => {
+        try {
+            const FASTAPI_CVD = process.env.FASTAPI_CVD || 'http://localhost:8003';
+
+            const fs = require('fs');
+
+            // 🔹 Get patient data from DB
+            const patient = await patientdata.findById(req.params.patientDataId);
+
+            if (!patient) {
+                return res.status(404).json({ error: 'Patient not found' });
+            }
+
+            const data = patient.cvdData;
+
+            // 🔁 Mapping: Frontend → Model (NHANES format)
+            const mappedInput = {
+                RIDAGEYR: Number(data.age),
+
+                // 1 = Male, 2 = Female (NHANES)
+                RIAGENDR: data.sex === '1' ? 1 : 2,
+
+                BMXBMI: Number(data.bmi || 25), // fallback if not present
+
+                BPXSY1: Number(data.bloodPressure),
+                BPXDI1: Number(data.diastolic || 80),
+                BPXSY2: Number(data.bloodPressure),
+                BPXDI2: Number(data.diastolic || 80),
+
+                // Hypertension rule
+                BPQ020: Number(data.bloodPressure) > 140 ? 1 : 2,
+
+                // Diabetes rule
+                DIQ010: data.bloodSugar == '1' ? 1 : 2,
+
+                // Smoking (if not present → assume no)
+                SMQ020: 2,
+
+                LBXTC: Number(data.cholesterol),
+                LBXHSCRP: Number(data.crp || 2.0) // fallback
+            };
+
+            // 🔥 Call FastAPI
+            const fastapiRes = await fetch(`${FASTAPI_CVD}/predict`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ data: mappedInput }),
+                signal: AbortSignal.timeout(20000),
+            });
+
+            if (!fastapiRes.ok) {
+                const errText = await fastapiRes.text();
+                return res.status(502).json({
+                    error: 'CVD ML service error',
+                    detail: errText
+                });
+            }
+
+            const result = await fastapiRes.json();
+
+            // 🔹 Extract prediction
+            const pred = result.result;
+
+            // 🔹 Save to DB (convert to readable format)
+            await patientdata.findByIdAndUpdate(
+                req.params.patientDataId,
+                {
+                    $set: {
+                        'cvdData.prediction': pred.cvd_positive ? 1 : 0,
+                        'cvdData.risk_label': pred.risk_level,
+                        'cvdData.risk_probability': pred.cvd_risk_score,
+                        'cvdData.risk_percentage': pred.cvd_risk_score * 100,
+                        'cvdData.predictedAt': new Date()
+                    }
+                },
+                { new: true }
+            );
+
+            // 🔹 Response to frontend (readable)
+            return res.status(200).json({
+                message: 'CVD prediction complete',
+                prediction: {
+                    risk: pred.risk_level,
+                    probability: pred.cvd_risk_score,
+                    percentage: (pred.cvd_risk_score * 100).toFixed(2),
+                    positive: pred.cvd_positive
+                }
+            });
+
+        } catch (err) {
+            console.error('[cvd predict]', err.message);
+            res.status(500).json({
+                error: 'CVD prediction failed',
+                detail: err.message
+            });
+        }
+    }
+);
 
 //patient get its own data 
 router.get("/patient", authenticateUser, checkRole('patient'), async (req, res) => {
     try {
         // fetch all medical history documents of this patient
         const userInfo = await patient.findById(req.user.id).select("name prediction risk_percentages");
-        const histories = await patientdata.find({ patient: req.user.id }).sort({ _id: -1 })
+        const histories = await patientdata.find({ patient: req.user.id })
         const doc = await assignment.findOne({ patient_id: req.user.id }).populate({
             path: 'doctor_id',
             select: 'name email Number',
             model: 'doctor'
         });
-        // console.log(doc);
+        // console.log(histories);
         if (!histories || !userInfo || histories.length === 0) {
             return res.status(404).json({
                 success: false,
@@ -807,7 +919,7 @@ router.get("/patient", authenticateUser, checkRole('patient'), async (req, res) 
             medical_history: histories, // return full array of history docs
             doctor: doctorInfo
         };
-
+        // console.log(responseData)
         res.status(200).json(responseData);
     } catch (error) {
         console.error("Prediction failed:", error);

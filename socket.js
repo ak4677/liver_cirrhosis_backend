@@ -140,7 +140,7 @@ app.get('/', (req, res) => {
 });
 
 // ── Start ─────────────────────────────────────────────────────────────────────
-const PORT = process.env.SOCKET_PORT || 4000;
-server.listen(PORT, () => {
+const PORT = process.env.PORT || 4000;
+server.listen(PORT, '0.0.0.0' ,() => {
     console.log(`[socket.js] Socket.io server running on port ${PORT}`);
 });
